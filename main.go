@@ -16,10 +16,8 @@ func main() {
 	flag.Parse()
 
 	layout := readLayout(*layoutPath)
-	fmt.Println(layout)
 
 	inputFiles := getFilePaths(*inputPath)
-	fmt.Println(inputFiles)
 	if len(inputFiles) <= 0 {
 		fmt.Println("Found no files to process.")
 		return
@@ -70,32 +68,33 @@ func getFilePaths(inputPath string) []string {
 }
 
 func remain(inputFiles []string, layout string, outputDir string) {
-	err := os.MkdirAll(outputDir, os.ModePerm)
-	if err != nil {
-		fmt.Printf("Failed to create output directories: %v", err)
-		return
-	}
-
 	mainReg := regexp.MustCompile(`<main[^>]*>(.*?)</main>`)
 	for _, contentFile := range inputFiles {
-		content := readContent(contentFile)
+		fullContent := readContent(contentFile)
+		innerContent := string(mainReg.Find([]byte(fullContent)))
+		if len(innerContent) == 0 {
+			innerContent = fullContent
+		}
+		innerContent = "<main>" + innerContent + "</main>"
+		combinedContent := mainReg.ReplaceAllString(layout, innerContent)
 
 		outputPath := filepath.Join(outputDir, contentFile)
+		dir := filepath.Dir(outputPath)
 
-		outputFile, err := os.Create(outputPath)
+		err := os.MkdirAll(dir, os.ModePerm)
 		if err != nil {
-			fmt.Printf("Failed to create output file: %v\n", outputFile)
-			return
+			println("Failed to create directory.", dir)
 		}
-		defer outputFile.Close()
 
-		// TODO: Clear non-main content in content to allow re-apply
-		combinedContent := mainReg.ReplaceAllString(layout, "<main>"+content+"</main>")
-
-		_, err = outputFile.Write([]byte(combinedContent))
+		file, err := os.Create(outputPath)
 		if err != nil {
-			fmt.Printf("Failed to write output to file: %v\n", err)
-			return
+			println("Failed to create file.", file, err)
+		}
+		defer file.Close()
+
+		_, err = file.WriteString(combinedContent)
+		if err != nil {
+			println("Failed to write content.", err)
 		}
 	}
 }
